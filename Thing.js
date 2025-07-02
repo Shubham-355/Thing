@@ -22,12 +22,20 @@ class TerminalCoder {
     }
 
     async initialize() {
-        console.log('🚀 Terminal Coder - Your AI Coding Assistant');
-        console.log('===========================================\n');
+        
+         console.log(`\x1b[38;2;217;119;87m
+ ████████╗██╗  ██╗██╗███╗   ██╗ ██████╗
+ ╚══██╔══╝██║  ██║██║████╗  ██║██╔════╝
+    ██║   ███████║██║██╔██╗ ██║██║  ███╗
+    ██║   ██╔══██║██║██║╚██╗██║██║   ██║
+    ██║   ██║  ██║██║██║ ╚████║╚██████╔╝
+    ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝
+\x1b[0m`);
+
         
         // Detect project type
         this.detectProjectType();
-        console.log(`📦 Project Type: ${this.projectType}`);
+        // console.log(`📦 Project Type: ${this.projectType}`);
         
         // Check and install dependencies if needed
         await this.ensureDependencies();
@@ -39,14 +47,14 @@ class TerminalCoder {
         try {
             const { GoogleGenAI } = require('@google/genai');
             this.genAI = new GoogleGenAI({});
-            console.log('✅ Gemini API initialized successfully');
+            // console.log('✅ Gemini API initialized successfully');
         } catch (error) {
             console.error('❌ Failed to initialize Gemini API:', error.message);
             console.log('💡 Make sure you have the latest @google/genai package installed');
             process.exit(1);
         }
         
-        console.log(`📁 Project Root: ${this.projectRoot}`);
+        // console.log(`📁 Project Root: ${this.projectRoot}`);
         await this.scanProject();
         this.startInteractiveMode();
     }
@@ -63,7 +71,7 @@ class TerminalCoder {
         // If still no API key, prompt user
         if (!apiKey) {
             console.log('🔑 Gemini API Key Setup Required');
-            console.log('=====================================');
+            // console.log('=====================================');
             console.log('💡 Get your free API key from: https://aistudio.google.com/app/apikey\n');
             
             apiKey = await this.promptForApiKey();
@@ -77,7 +85,7 @@ class TerminalCoder {
             this.saveApiKeyToEnv(apiKey);
             console.log('✅ API key saved to .env file\n');
         } else {
-            console.log('✅ API key found\n');
+            console.log('\n');
         }
         
         // Set in environment for this session
@@ -244,7 +252,7 @@ class TerminalCoder {
                         const content = fs.readFileSync(fullPath, 'utf8');
                         // Skip very large files
                         if (content.length > 100000) {
-                            console.log(`⚠️  Skipping large file: ${relativePath}`);
+                            // console.log(`⚠️  Skipping large file: ${relativePath}`);
                             continue;
                         }
                         
