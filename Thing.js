@@ -817,7 +817,6 @@ async function createSpinner(text = 'Loading...', options = {}) {
     };
 }
 
-// Start the application
 if (require.main === module) {
     const terminalCoder = new TerminalCoder();
     terminalCoder.initialize().catch(console.error);
