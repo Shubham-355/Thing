@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
 const { execSync } = require('child_process');
+const chalk = require('chalk');
 
 class TerminalCoder {
     constructor() {
@@ -201,33 +202,80 @@ class TerminalCoder {
             return;
         }
 
-        try {
-            // Check if @google/genai is available (new package)
-            require.resolve('@google/genai');
-            console.log('✅ Dependencies already available');
-        } catch (error) {
-            console.log('📦 Installing required dependencies...');
-            
+        // Check for required dependencies
+        const requiredPackages = ['@google/genai', 'ora'];
+        const missingPackages = [];
+
+        for (const pkg of requiredPackages) {
             try {
-                // Install the new package without modifying package.json
-                execSync('npm install @google/genai --no-save', { 
-                    stdio: 'inherit',
+                require.resolve(pkg);
+            } catch (error) {
+                missingPackages.push(pkg);
+            }
+        }
+
+        if (missingPackages.length === 0) {
+            // console.log('✅ All dependencies are already installed');
+            return;
+        }
+
+        console.log(`📦 Installing missing dependencies: ${missingPackages.join(', ')}...`);
+        
+        try {
+            // Install packages one by one to avoid conflicts
+            for (const pkg of missingPackages) {
+                console.log(`   Installing ${pkg}...`);
+                execSync(`npm install ${pkg}`, { 
+                    stdio: 'pipe', // Changed from 'inherit' to 'pipe' to reduce noise
                     cwd: this.projectRoot 
                 });
-                console.log('✅ Dependencies installed successfully');
-            } catch (installError) {
-                console.error('❌ Failed to install dependencies automatically');
-                console.log('💡 Please run: npm install @google/genai --no-save');
-                process.exit(1);
             }
+            
+            console.log('✅ Dependencies installed successfully');
+            
+            // Verify installation after a brief delay
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            // Re-check if packages are now available
+            const stillMissing = [];
+            for (const pkg of requiredPackages) {
+                try {
+                    require.resolve(pkg);
+                } catch (error) {
+                    stillMissing.push(pkg);
+                }
+            }
+            
+            if (stillMissing.length > 0) {
+                throw new Error(`Still missing packages after installation: ${stillMissing.join(', ')}`);
+            }
+            
+        } catch (installError) {
+            console.error('❌ Failed to install dependencies automatically');
+            console.error('Error details:', installError.message);
+            console.log(`💡 Please manually run: npm install ${missingPackages.join(' ')}`);
+            console.log('💡 Then restart the application');
+            process.exit(1);
         }
     }
 
     async scanProject() {
-        console.log('🔍 Scanning project files...');
-        this.fileCache.clear();
-        await this.scanDirectory(this.projectRoot);
-        console.log(`✅ Found ${this.fileCache.size} files\n`);
+        const spinner = await createSpinner('Scanning project files...\n');
+
+        try {
+            this.fileCache.clear();
+            spinner.updateText('Analyzing directories...');
+            spinner.updateText();
+            await this.scanDirectory(this.projectRoot);
+            spinner.stop();
+            // console.log(`✅ Found ${this.fileCache.size} files\n`);
+        } catch (error) {
+            spinner.stop();
+            spinner.fail('❌ Error scanning project:', error.message);
+            // console.log('💡 Please check your project structure and try again');
+            throw error;
+        }
+        
     }
 
     async scanDirectory(dir, level = 0) {
@@ -413,15 +461,15 @@ class TerminalCoder {
     }
 
     async processCodeRequest(request) {
-        console.log('🤖 Processing your request...\n');
-        console.log('📊 Sending ALL project files to Gemini for analysis...');
+        const spinner = await createSpinner('\n');
+        // console.log('📊 Sending ALL project files to Gemini for analysis...');
 
         try {
             // Prepare COMPLETE context for Gemini (all files)
             const context = this.prepareCompleteContext();
             const prompt = this.buildComprehensivePrompt(request, context);
 
-            console.log(`📤 Sending ${context.totalFiles} files (${Math.round(context.totalTokens/1000)}k tokens) to Gemini...`);
+            // console.log(`📤 Sending ${context.totalFiles} files (${Math.round(context.totalTokens/1000)}k tokens) to Gemini...`);
 
             // Get response from Gemini using new API format
             const response = await this.genAI.models.generateContent({
@@ -435,7 +483,8 @@ class TerminalCoder {
             });
 
             const responseText = response.text;
-            console.log('✅ Received response from Gemini\n');
+            spinner.stop();
+            // console.log('✅ Received response\n');
 
             // Parse and apply changes
             await this.parseAndApplyChanges(responseText);
@@ -556,20 +605,21 @@ Only include files that actually need changes. Be thorough but precise.`;
     }
 
     async parseAndApplyChanges(response) {
-        console.log('📝 Gemini Response Analysis:');
-        console.log('===========================\n');
+        console.log('\n');
+        console.log(chalk.hex('#d97757')('Thing Response Analysis:'));
+        console.log('\n');
 
         const fileChanges = this.extractFileChanges(response);
         
         if (fileChanges.length === 0) {
-            console.log('💬 Gemini Response (No file changes detected):');
+            console.log('💬 Thing Response (No file changes detected):');
             console.log(response);
             console.log('\n🤖 If you expected file changes, try rephrasing your request to be more specific.\n');
             return;
         }
 
         // Show comprehensive preview of changes
-        console.log(`🔍 Gemini analyzed your entire project and proposes ${fileChanges.length} file changes:\n`);
+        console.log(`🔍 Thing analyzed your entire project and proposes ${fileChanges.length} file changes:\n`);
         
         fileChanges.forEach((change, index) => {
             console.log(`${index + 1}. ${change.action} ${change.path}`);
@@ -733,6 +783,38 @@ Only include files that actually need changes. Be thorough but precise.`;
         console.log(`\n💡 Your project has been updated. Test the changes and commit when ready.`);
         console.log(`\n💬 Ready for your next request:\n`);
     }
+}
+
+async function createSpinner(text = 'Loading...', options = {}) {
+    const { default: ora } = await import('ora');
+    
+    const spinner = ora({
+        text,
+        color: 'blue',
+        spinner: 'dots',
+        ...options
+    }).start();
+
+    return {
+        updateText: (newText) => {
+            spinner.text = newText;
+        },
+        succeed: (successText) => {
+            spinner.succeed(successText);
+        },
+        fail: (failText) => {
+            spinner.fail(failText);
+        },
+        warn: (warnText) => {
+            spinner.warn(warnText);
+        },
+        info: (infoText) => {
+            spinner.info(infoText);
+        },
+        stop: () => {
+            spinner.stop();
+        }
+    };
 }
 
 // Start the application
